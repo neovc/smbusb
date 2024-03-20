@@ -137,6 +137,7 @@ void printUsage() {
 	  printf("--flash-eeprom=<file> ,  -w <file>          =   flash the <file> to the chip's eeprom(data) flash\n");
 
 	  printf("--execute                                   =   exit the Boot ROM and execute program flash\n");
+	  printf("--enterrom                                  =   enter the Boot ROM\n");
 	  printf("--no-verify                                 =   skip verification after flashing (not recommended)\n");
 	  printf("--no-pec                                    =   disable SMBus Packet Error Checking (not recommended)\n");
 }
@@ -152,6 +153,7 @@ int main(int argc, char **argv)
 	static int noPec=0;
 	static int confirmDelete=0;
 	static int execute=0;
+	static int enterrom = 0;
 	unsigned char block[256];
 	unsigned char block2[256];
 
@@ -175,6 +177,7 @@ int main(int argc, char **argv)
 	          {"no-verify", no_argument,       &noVerify, 1},
 	 	  {"no-pec", no_argument,       &noPec, 1},		
 	          {"execute",    no_argument, &execute,1},
+	          {"enterrom",   no_argument, &enterrom,1},
 
 	          {"save-program",  required_argument, 0, 'p'},
 	          {"save-eeprom",  required_argument, 0, 'e'},
@@ -234,6 +237,21 @@ int main(int argc, char **argv)
 		printf("SMBusb Firmware Version: %d.%d.%d\n",status&0xFF,(status >>8)&0xFF,(status >>16)&0xFF);
 	} else {
 		printf("Error: %s\n",SMBGetErrorString(status));
+		exit(0);
+	}
+
+	if (enterrom) {
+		int val;
+		SMBWriteWord(0x16, 0x71, 0x0214);
+		printf("Send 0x0214 -> 0x71\n");
+		val = SMBReadWord(0x16, 0x73);
+		printf("Read 0x%x from 0x73\n", val);
+		val = 0x10000 - val;
+		printf("First password: 0x%x\n", val);
+		SMBWriteWord(0x16, 0x71, val);
+		printf("Send 0x%x -> 0x71\n", val);
+		SMBWriteWord(0x16, 0x70, 0x0517);
+		printf("Send 0x0517->0x70\nHacking OK\n");
 		exit(0);
 	}
 
