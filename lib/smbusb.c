@@ -36,6 +36,10 @@ static libusb_device_handle *device = NULL;
 
 void (*extLogFunc)(unsigned char* buf, unsigned int len) = NULL;
 
+#define TIMEOUT	100
+#define MAXLEN	128
+#define DELAY 300
+
 void logerror(const char *format, ...)
 {
 	if (extLogFunc == NULL) return;
@@ -57,21 +61,21 @@ int InitDevice(){
 		return ERR_CLAIM_INTERFACE;
 	}
 
-	if (SMBInterfaceID() != 0x4d5355) 
+	if (SMBInterfaceID() != 0x4d5355)
 	{
 		// try loading firmware
 		if ((status = CypressUploadIhxFirmware(device, (char *)&build_smbusb_firmware_ihx, build_smbusb_firmware_ihx_len)) <0) return status;
-		sleep(2);	
+		sleep(2);
 		return INIT_RETRY;
 	}
 
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_FIRMWARE_VERSION,
-					0, 
 					0,
-					(void*)&fwver, 
-					3, 
+					0,
+					(void*)&fwver,
+					3,
 					1000);
   	if (status==3) {return fwver;} else {return status;}
 }
@@ -87,13 +91,13 @@ int SMBOpenDeviceVIDPID(unsigned int vid,unsigned int pid){
 		return status;
 	}
 	libusb_set_debug(NULL, 0);
-	
+
 	openvidpid_retry:
 	device = libusb_open_device_with_vid_pid(NULL, (uint16_t)vid, (uint16_t)pid);
 		if (device == NULL) {
 			logerror("libusb_open() failed\n");
-			return ERR_DEVICE_OPEN;		
-		}	
+			return ERR_DEVICE_OPEN;
+		}
 	status = InitDevice();
 	if (status == INIT_RETRY) goto openvidpid_retry;
 	return status;
@@ -101,7 +105,7 @@ int SMBOpenDeviceVIDPID(unsigned int vid,unsigned int pid){
 
 int SMBOpenDeviceBusAddr(unsigned int bus, unsigned int addr){
 	int i,status;
-	
+
 	if (device != NULL) return ERR_ALREADY_OPEN;
 
 	status = libusb_init(NULL);
@@ -124,7 +128,7 @@ int SMBOpenDeviceBusAddr(unsigned int bus, unsigned int addr){
 			if (status < 0) {
 				logerror("libusb_open() failed: %s\n", libusb_error_name(status));
 				return status;
-			}				
+			}
 			status = InitDevice();
 			if (status == INIT_RETRY) goto openbusadd_retry;
 			return status;
@@ -144,126 +148,137 @@ void SMBCloseDevice() {
 unsigned int SMBInterfaceID() {
 	unsigned int magic=0;
 	int status;
+
+	usleep(DELAY);
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_INTERFACE_ID,
-					0, 
 					0,
-					(void*)&magic, 
-					3, 
-					100);
+					0,
+					(void*)&magic,
+					3,
+					TIMEOUT);
 	if ((status <=0) | (magic != 0x4d5355)) {
-		return 0;	
+		return 0;
 	} else {
 		return magic;
-	}	
+	}
 }
 
 int SMBReadByte(unsigned int address, unsigned char command) {
 	int status, ret=0;
-	
+
+	usleep(DELAY);
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_READ_BYTE,
-					address, 
+					address,
 					command,
-					(void*)&ret, 
-					1, 
-					100);
+					(void*)&ret,
+					1,
+					TIMEOUT);
 	if (status==1) { return ret;} else {return status;}
 }
 
 int SMBSendByte(unsigned int address, unsigned char command) {
 	int status, ret=0;
-	
+
+	usleep(DELAY);
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_SEND_BYTE,
-					address, 
+					address,
 					command,
-					(void*)&ret, 
-					1, 
-					100);
+					(void*)&ret,
+					1,
+					TIMEOUT);
 	return status;
 }
 
 
 int SMBWriteByte(unsigned int address, unsigned char command, unsigned char data) {
 	int status, ret=0;
-	
+
+	usleep(DELAY);
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_WRITE_BYTE,
-					address, 
+					address,
 					command,
-					&data, 
-					1, 
-					100);
+					&data,
+					1,
+					TIMEOUT);
 	if (status==1) { return ret;} else {return status;}
 }
 
 
 int SMBReadWord(unsigned int address, unsigned char command) {
 	int status, ret=0;
-	
+
+	usleep(DELAY);
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_READ_WORD,
-					address, 
+					address,
 					command,
-					(void*)&ret, 
-					2, 
-					100);
-	if (status==2) { return ret;} else {return status;}
+					(void*)&ret,
+					2,
+					TIMEOUT);
+	if (status==2) { return ret;} else {
+		printf("SMBReadWord() return status = %d, %s\n", status, libusb_error_name(status));
+		return 0;}
 }
 
 int SMBWriteWord(unsigned int address, unsigned char command, unsigned int data) {
 	int status, ret=0;
-	
+
+	usleep(DELAY);
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_WRITE_WORD,
-					address, 
+					address,
 					command,
-					(void*)&data, 
-					2, 
-					100);
+					(void*)&data,
+					2,
+					TIMEOUT);
 	if (status==2) { return ret;} else {return status;}
 }
 
 
 int SMBReadBlock(unsigned int address, unsigned char command, unsigned char *data) {
 	int status, rcvd=0, total = 0;
-	unsigned char *tmp = malloc(64);
+	unsigned char *tmp = malloc(MAXLEN);
 
+	usleep(DELAY);
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_READ_BLOCK,
-					address, 
+					address,
 					command,
-					(void*)tmp, 
-					64, 
-					100);
+					(void*)tmp,
+					MAXLEN,
+					TIMEOUT);
 
 	if (status <=0) {
 		 free(tmp);
+		 printf("SMBReadBlock() return status = %d, %s\n", status, libusb_error_name(status));
 		 return status;
 	}
 	total = tmp[0];
 	rcvd+=status-1;
 
 	memcpy(data,tmp+1,rcvd);
-	
+
 	while (rcvd < total) {
-		
+		usleep(DELAY);
 		status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_READ_BLOCK,
-					address, 
+					address,
 					command,
-					(void*)tmp, 
-					64, 
-					100);
+					(void*)tmp,
+					MAXLEN,
+					TIMEOUT);
 
 		if (status <0) {
 			 free(tmp);
@@ -272,7 +287,7 @@ int SMBReadBlock(unsigned int address, unsigned char command, unsigned char *dat
 		memcpy(data+rcvd,tmp,status);
 		rcvd+=status;
 	}
-		
+
 	free(tmp);
 	return total;
 }
@@ -280,7 +295,7 @@ int SMBReadBlock(unsigned int address, unsigned char command, unsigned char *dat
 int SMBWriteBlock(unsigned int address, unsigned char command, unsigned char *data, unsigned char len) {
 	int status, i=0, wholeWrites=0, remainder=0;
 	unsigned char *tmp = malloc(256);
-	
+
 	wholeWrites = (len+1) / 64;
 	remainder = (len+1) - wholeWrites*64;
 
@@ -288,14 +303,15 @@ int SMBWriteBlock(unsigned int address, unsigned char command, unsigned char *da
 	memcpy(tmp+1,data,len);
 
 	while (i<wholeWrites) {
+		usleep(DELAY);
 		status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_WRITE_BLOCK,
-					address, 
+					address,
 					command,
-					(void*)(tmp+(i*64)), 
-					64, 
-					100);		
+					(void*)(tmp+(i*64)),
+					64,
+					TIMEOUT);
 		if (status != 64) {
 			free(tmp);
 			return status;
@@ -304,22 +320,23 @@ int SMBWriteBlock(unsigned int address, unsigned char command, unsigned char *da
 	}
 
 	if (remainder>0) {
+		usleep(DELAY);
 		status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_WRITE_BLOCK,
-					address, 
+					address,
 					command,
-					(void*)(tmp+(wholeWrites*64)), 
-					remainder, 
-					100);	
+					(void*)(tmp+(wholeWrites*64)),
+					remainder,
+					TIMEOUT);
 		if (status != remainder) {
 			free(tmp);
 			return status;
 		}
 	}
-	
+
 	free(tmp);
-	return len;			
+	return len;
 }
 
 
@@ -329,29 +346,29 @@ unsigned char SMBGetLastReadPECFail() {
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_GET_CLEAR_PEC_FAIL,
-					1, 
+					1,
 					0,
-					(void*)&pec_failed, 
-					1, 
-					100);
+					(void*)&pec_failed,
+					1,
+					TIMEOUT);
 
-	if (status==1) { return pec_failed;} else return status;	
+	if (status==1) { return pec_failed;} else return status;
 }
 
 void SMBEnablePEC(unsigned char state) {
 		libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_ENABLE_PEC,
-					state>0?1:0, 
+					state>0?1:0,
 					0,
-					NULL, 
-					0, 
-					100);
+					NULL,
+					0,
+					TIMEOUT);
 }
 
 int SMBWrite(unsigned char start, unsigned char restart, unsigned char stop, unsigned char *data, unsigned int len) {
 	int status,i,wholeWrites,remainder;
-	unsigned char rs;	
+	unsigned char rs;
 
 	wholeWrites = len / 64;
 	remainder = len-wholeWrites*64;
@@ -368,11 +385,11 @@ int SMBWrite(unsigned char start, unsigned char restart, unsigned char stop, uns
 		status = libusb_control_transfer(device,
 						LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 						SMB_WRITE,
-						64, 
+						64,
 						rs,
-						(void*)(data+(i*64)), 
-						64, 
-						100);
+						(void*)(data+(i*64)),
+						64,
+						TIMEOUT);
 		rs &= ~SMB_WRITE_CMD_START_FIRST;
 		rs &= ~SMB_WRITE_CMD_RESTART_FIRST;
 
@@ -380,30 +397,30 @@ int SMBWrite(unsigned char start, unsigned char restart, unsigned char stop, uns
 
 		i++;
 	}
-	 
-       	if (remainder>0) { 
+
+	if (remainder>0) {
 		if (stop) rs |= SMB_WRITE_CMD_STOP_AFTER;
 		status = libusb_control_transfer(device,
 						LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 						SMB_WRITE,
-						remainder, 
+						remainder,
 						rs,
-						(void*)(data+(wholeWrites*64)), 
-						remainder, 
-						100);		
+						(void*)(data+(wholeWrites*64)),
+						remainder,
+						TIMEOUT);
 	}
 	if (status >0) { return len; } else { return status; }
-	
+
 }
 
 int SMBRead(unsigned int len, unsigned char* data, unsigned char lastRead) {
 	int status,i,wholeReads,remainder;
-	unsigned char rs;	
-	
+	unsigned char rs;
+
 	wholeReads = len / 64;
 	remainder = len-wholeReads*64;
 //	printf("wholeReads:%d, remainder:%d\n",wholeReads,remainder);
-	
+
 	rs=0;
 
 	rs |= SMB_READ_CMD_FIRST_READ;
@@ -413,15 +430,15 @@ int SMBRead(unsigned int len, unsigned char* data, unsigned char lastRead) {
 		status = libusb_control_transfer(device,
 						LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 						SMB_READ,
-						64, 
+						64,
 						rs,
-						(void*)(data+(i*64)), 
-						64, 
-						100);		
-		
+						(void*)(data+(i*64)),
+						64,
+						TIMEOUT);
+
 		rs &= ~SMB_READ_CMD_FIRST_READ;
 //               	printf("wholeRead:%d, status:%d\n",i,status);
-		if (status<64) return status;		
+		if (status<64) return status;
 		i++;
 	}
 
@@ -432,12 +449,12 @@ int SMBRead(unsigned int len, unsigned char* data, unsigned char lastRead) {
 		status = libusb_control_transfer(device,
 						LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 						SMB_READ,
-						remainder, 
+						remainder,
 						rs,
-						(void*)(data+(wholeReads*64)), 
-						remainder, 
-						100);		
-	}	
+						(void*)(data+(wholeReads*64)),
+						remainder,
+						TIMEOUT);
+	}
 //            	printf("remainder:%d, status:%d\n",i,status);
 	return status;
 }
@@ -448,14 +465,14 @@ unsigned int SMBGetArbPEC() {
 	status = libusb_control_transfer(device,
 					LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 					SMB_GET_MRQ_PECS,
-					2, 
+					2,
 					0,
-					(void*)&pecs, 
-					2, 
-					100);
+					(void*)&pecs,
+					2,
+					TIMEOUT);
 
 	if (status==2) { return pecs;} else return status;
-	
+
 }
 
 int SMBTestAddressACK(unsigned int address) {
@@ -465,10 +482,10 @@ int SMBTestAddressACK(unsigned int address) {
 	status = libusb_control_transfer(device,
 				LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 				SMB_TEST_ADDRESS_ACK,
-				address, 
+				address,
 				0,
-				(void*)&res, 
-				1, 
+				(void*)&res,
+				1,
 				200);
 
 	if (status ==1) { return res; } else {return status;}
@@ -480,11 +497,11 @@ int SMBTestCommandACK(unsigned int address, unsigned char command){
 	status = libusb_control_transfer(device,
 				LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 				SMB_TEST_COMMAND_ACK,
-				address, 
+				address,
 				command,
-				(void*)&res, 
-				1, 
-				100);
+				(void*)&res,
+				1,
+				TIMEOUT);
 
 	if (status ==1) { return res; } else {return status;}
 
@@ -495,11 +512,11 @@ int SMBTestCommandWrite(unsigned int address, unsigned char command){
 	status = libusb_control_transfer(device,
 				LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 				SMB_TEST_COMMAND_WRITE,
-				address, 
+				address,
 				command,
-				(void*)&res, 
-				1, 
-				100);
+				(void*)&res,
+				1,
+				TIMEOUT);
 
 	if (status ==1) { return res; } else {return status;}
 }
@@ -543,8 +560,9 @@ const char* SMBGetErrorString(int errorCode) {
 			return "Device already in use";
 		case ERR_CLAIM_INTERFACE:
 			return "Unable to claim interface (insufficient permissions?)";
-		default:	
-			sprintf(errorMsgBuf,"Unknown libusb error code (%d)",errorCode);		
+		default:
+			sprintf(errorMsgBuf,"Unknown libusb error code (%d)",errorCode);
 			return (const char*)errorMsgBuf;
 	}
 }
+
